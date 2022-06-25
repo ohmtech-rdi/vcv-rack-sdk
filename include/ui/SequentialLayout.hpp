@@ -17,11 +17,18 @@ struct SequentialLayout : widget::Widget {
 		LEFT_ALIGNMENT,
 		CENTER_ALIGNMENT,
 		RIGHT_ALIGNMENT,
+
+		TOP_ALIGNMENT = LEFT_ALIGNMENT,
+		MIDDLE_ALIGNMENT = CENTER_ALIGNMENT,
+		BOTTOM_ALIGNMENT = RIGHT_ALIGNMENT,
 	};
 
 	Orientation orientation = HORIZONTAL_ORIENTATION;
 	Alignment alignment = LEFT_ALIGNMENT;
-	/** Space between adjacent elements */
+	bool wrap = true;
+	/** Space between box bounds. */
+	math::Vec margin;
+	/** Space between adjacent elements, and adjacent lines if wrapped. */
 	math::Vec spacing;
 
 	void step() override;

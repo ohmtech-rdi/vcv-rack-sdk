@@ -11,7 +11,7 @@ namespace engine {
 static const int PORT_MAX_CHANNELS = 16;
 
 
-struct alignas(32) Port {
+struct Port {
 	/** Voltage of the port. */
 	union {
 		/** Unstable API. Use getVoltage() and setVoltage() instead. */
@@ -20,9 +20,10 @@ struct alignas(32) Port {
 		float value;
 	};
 	union {
-		/** Number of polyphonic channels
-		Unstable API. Use set/getChannels() instead.
+		/** Number of polyphonic channels.
+		DEPRECATED. Unstable API. Use set/getChannels() instead.
 		May be 0 to PORT_MAX_CHANNELS.
+		0 channels means disconnected.
 		*/
 		uint8_t channels = 0;
 		/** DEPRECATED. Unstable API. Use isConnected() instead. */
@@ -32,6 +33,11 @@ struct alignas(32) Port {
 	Green for positive, red for negative, and blue for polyphonic.
 	*/
 	Light plugLights[3];
+
+	enum Type {
+		INPUT,
+		OUTPUT,
+	};
 
 	/** Sets the voltage of the given channel. */
 	void setVoltage(float voltage, int channel = 0) {
@@ -96,6 +102,25 @@ struct alignas(32) Port {
 			sum += voltages[c];
 		}
 		return sum;
+	}
+
+	/** Returns the root-mean-square of all voltages.
+	Uses sqrt() which is slow, so use a custom approximation if calling frequently.
+	*/
+	float getVoltageRMS() {
+		if (channels == 0) {
+			return 0.f;
+		}
+		else if (channels == 1) {
+			return std::fabs(voltages[0]);
+		}
+		else {
+			float sum = 0.f;
+			for (int c = 0; c < channels; c++) {
+				sum += std::pow(voltages[c], 2);
+			}
+			return std::sqrt(sum);
+		}
 	}
 
 	template <typename T>
@@ -167,8 +192,6 @@ struct alignas(32) Port {
 	bool isPolyphonic() {
 		return channels > 1;
 	}
-
-	void process(float deltaTime);
 
 	/** Use getNormalVoltage() instead. */
 	DEPRECATED float normalize(float normalVoltage) {

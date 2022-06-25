@@ -3,7 +3,6 @@
 #include <widget/OpaqueWidget.hpp>
 #include <app/RackScrollWidget.hpp>
 #include <app/RackWidget.hpp>
-#include <app/MenuBar.hpp>
 
 
 namespace rack {
@@ -11,28 +10,29 @@ namespace app {
 
 
 struct Scene : widget::OpaqueWidget {
+	struct Internal;
+	Internal* internal;
+
 	// Convenience variables for accessing important widgets
 	RackScrollWidget* rackScroll;
 	RackWidget* rack;
-	MenuBar* menuBar;
-	widget::Widget* moduleBrowser;
-	widget::Widget* frameRateWidget;
+	widget::Widget* menuBar;
+	widget::Widget* browser;
 
-	double lastAutosaveTime = 0.0;
+	/** The last mouse position in the Scene.
+	DEPRECATED. Use getMousePos() instead.
+	*/
+	math::Vec mousePos;
 
-	// Version checking
-	bool checkVersion = true;
-	bool checkedVersion = false;
-	std::string latestVersion;
-
-	Scene();
-	~Scene();
+	PRIVATE Scene();
+	PRIVATE ~Scene();
+	math::Vec getMousePos();
 	void step() override;
 	void draw(const DrawArgs& args) override;
-	void onHoverKey(const event::HoverKey& e) override;
-	void onPathDrop(const event::PathDrop& e) override;
-
-	void runCheckVersion();
+	void onHover(const HoverEvent& e) override;
+	void onDragHover(const DragHoverEvent& e) override;
+	void onHoverKey(const HoverKeyEvent& e) override;
+	void onPathDrop(const PathDropEvent& e) override;
 };
 
 

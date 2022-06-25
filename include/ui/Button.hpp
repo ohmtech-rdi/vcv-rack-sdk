@@ -8,6 +8,13 @@ namespace rack {
 namespace ui {
 
 
+/** A clickable button with text.
+Dispatches Action event when clicked.
+
+If quantity is set, its value is set to 1.0 when pressed, 0.0 when released.
+
+If text is not set, the quantity label is used.
+*/
 struct Button : widget::OpaqueWidget {
 	std::string text;
 	/** Not owned. Tracks the pressed state of the button.*/
@@ -15,9 +22,9 @@ struct Button : widget::OpaqueWidget {
 
 	Button();
 	void draw(const DrawArgs& args) override;
-	void onDragStart(const event::DragStart& e) override;
-	void onDragEnd(const event::DragEnd& e) override;
-	void onDragDrop(const event::DragDrop& e) override;
+	void onDragStart(const DragStartEvent& e) override;
+	void onDragEnd(const DragEndEvent& e) override;
+	void onDragDrop(const DragDropEvent& e) override;
 };
 
 

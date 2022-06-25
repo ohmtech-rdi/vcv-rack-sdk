@@ -17,26 +17,33 @@ DISTRIBUTABLES += plugin.json
 FLAGS += -fPIC
 FLAGS += -I$(RACK_DIR)/include -I$(RACK_DIR)/dep/include
 
+LDFLAGS += -shared
+# Plugins must link to libRack because when Rack is used as a plugin of another application, its symbols are not available to subsequently loaded shared libraries.
+LDFLAGS += -L$(RACK_DIR) -lRack
+
 include $(RACK_DIR)/arch.mk
 
 ifdef ARCH_LIN
-	LDFLAGS += -shared
 	TARGET := plugin.so
-	RACK_USER_DIR ?= $(HOME)/.Rack
-	# Link to glibc 2.23
-# 	FLAGS += -include force_link_glibc_2.23.h
+	# This prevents static variables in the DSO (dynamic shared object) from being preserved after dlclose().
+	FLAGS += -fno-gnu-unique
+	# When Rack loads a plugin, it symlinks /tmp/Rack2 to its system dir, so the plugin can link to libRack.
+	LDFLAGS += -Wl,-rpath=/tmp/Rack2
+	# Since the plugin's compiler could be a different version than Rack's compiler, link libstdc++ and libgcc statically to avoid ABI issues.
+	LDFLAGS += -static-libstdc++ -static-libgcc
+	RACK_USER_DIR ?= $(HOME)/.Rack2
 endif
 
 ifdef ARCH_MAC
-	LDFLAGS += -shared -undefined dynamic_lookup
 	TARGET := plugin.dylib
-	RACK_USER_DIR ?= $(HOME)/Documents/Rack
+	LDFLAGS += -undefined dynamic_lookup
+	RACK_USER_DIR ?= $(HOME)/Documents/Rack2
 endif
 
 ifdef ARCH_WIN
-	LDFLAGS += -shared -L$(RACK_DIR) -lRack
 	TARGET := plugin.dll
-	RACK_USER_DIR ?= "$(USERPROFILE)"/Documents/Rack
+	LDFLAGS += -static-libstdc++
+	RACK_USER_DIR ?= $(USERPROFILE)/Documents/Rack2
 endif
 
 
@@ -51,27 +58,32 @@ include $(RACK_DIR)/compile.mk
 clean:
 	rm -rfv build $(TARGET) dist
 
+ZSTD_COMPRESSION_LEVEL ?= 19
+
 dist: all
 	rm -rf dist
-	mkdir -p dist/"$(SLUG)"
+	mkdir -p dist/$(SLUG)
 	@# Strip and copy plugin binary
-	cp $(TARGET) dist/"$(SLUG)"/
+	cp $(TARGET) dist/$(SLUG)/
 ifdef ARCH_MAC
-	$(STRIP) -S dist/"$(SLUG)"/$(TARGET)
+	$(STRIP) -S dist/$(SLUG)/$(TARGET)
+	$(INSTALL_NAME_TOOL) -change libRack.dylib /tmp/Rack2/libRack.dylib dist/$(SLUG)/$(TARGET)
+	$(OTOOL) -L dist/$(SLUG)/$(TARGET)
 else
-	$(STRIP) -s dist/"$(SLUG)"/$(TARGET)
+	$(STRIP) -s dist/$(SLUG)/$(TARGET)
 endif
 	@# Copy distributables
 ifdef ARCH_MAC
-	rsync -rR $(DISTRIBUTABLES) dist/"$(SLUG)"/
+	rsync -rR $(DISTRIBUTABLES) dist/$(SLUG)/
 else
-	cp -r --parents $(DISTRIBUTABLES) dist/"$(SLUG)"/
+	cp -r --parents $(DISTRIBUTABLES) dist/$(SLUG)/
 endif
 	@# Create ZIP package
-	cd dist && zip -q -9 -r "$(SLUG)"-"$(VERSION)"-$(ARCH).zip "$(SLUG)"
+	cd dist && tar -c $(SLUG) | zstd -$(ZSTD_COMPRESSION_LEVEL) -o "$(SLUG)"-"$(VERSION)"-$(ARCH_OS_NAME).vcvplugin
 
 install: dist
-	cp dist/"$(SLUG)"-"$(VERSION)"-$(ARCH).zip $(RACK_USER_DIR)/plugins-v1/
+	mkdir -p "$(RACK_USER_DIR)"/plugins/
+	cp dist/*.vcvplugin "$(RACK_USER_DIR)"/plugins/
 
 .PHONY: clean dist
 .DEFAULT_GOAL := all

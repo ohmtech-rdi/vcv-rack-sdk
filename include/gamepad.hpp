@@ -3,15 +3,12 @@
 
 
 namespace rack {
-
-
-/** Gamepad/joystick/controller MIDI driver
-*/
+/** Gamepad/joystick/controller MIDI driver */
 namespace gamepad {
 
 
-void init();
-void step();
+PRIVATE void init();
+PRIVATE void step();
 
 
 } // namespace gamepad

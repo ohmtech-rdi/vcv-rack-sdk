@@ -17,16 +17,13 @@ struct SvgKnob : Knob {
 	CircularShadow* shadow;
 	widget::TransformWidget* tw;
 	widget::SvgWidget* sw;
-	/** Angles in radians */
-	float minAngle = 0.f;
-	float maxAngle = M_PI;
 
 	SvgKnob();
-	void setSvg(std::shared_ptr<Svg> svg);
-	DEPRECATED void setSVG(std::shared_ptr<Svg> svg) {
+	void setSvg(std::shared_ptr<window::Svg> svg);
+	DEPRECATED void setSVG(std::shared_ptr<window::Svg> svg) {
 		setSvg(svg);
 	}
-	void onChange(const event::Change& e) override;
+	void onChange(const ChangeEvent& e) override;
 };
 
 

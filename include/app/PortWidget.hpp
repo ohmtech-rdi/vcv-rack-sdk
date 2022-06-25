@@ -1,8 +1,9 @@
 #pragma once
 #include <app/common.hpp>
 #include <widget/OpaqueWidget.hpp>
-#include <app/MultiLightWidget.hpp>
+#include <ui/Tooltip.hpp>
 #include <engine/Module.hpp>
+#include <engine/PortInfo.hpp>
 
 
 namespace rack {
@@ -11,31 +12,34 @@ namespace app {
 
 /** Manages an engine::Port on a ModuleWidget. */
 struct PortWidget : widget::OpaqueWidget {
-	engine::Module* module = NULL;
-	int portId;
-	bool hovered = false;
+	struct Internal;
+	Internal* internal;
 
-	enum Type {
-		OUTPUT,
-		INPUT
-	};
-	Type type;
-	MultiLightWidget* plugLight;
+	engine::Module* module = NULL;
+	engine::Port::Type type = engine::Port::INPUT;
+	int portId = -1;
 
 	PortWidget();
 	~PortWidget();
+	engine::Port* getPort();
+	engine::PortInfo* getPortInfo();
+	void createTooltip();
+	void destroyTooltip();
+	void createContextMenu();
+	virtual void appendContextMenu(ui::Menu* menu) {}
+	void deleteTopCableAction();
 
 	void step() override;
 	void draw(const DrawArgs& args) override;
 
-	void onButton(const event::Button& e) override;
-	void onEnter(const event::Enter& e) override;
-	void onLeave(const event::Leave& e) override;
-	void onDragStart(const event::DragStart& e) override;
-	void onDragEnd(const event::DragEnd& e) override;
-	void onDragDrop(const event::DragDrop& e) override;
-	void onDragEnter(const event::DragEnter& e) override;
-	void onDragLeave(const event::DragLeave& e) override;
+	void onButton(const ButtonEvent& e) override;
+	void onEnter(const EnterEvent& e) override;
+	void onLeave(const LeaveEvent& e) override;
+	void onDragStart(const DragStartEvent& e) override;
+	void onDragEnd(const DragEndEvent& e) override;
+	void onDragDrop(const DragDropEvent& e) override;
+	void onDragEnter(const DragEnterEvent& e) override;
+	void onDragLeave(const DragLeaveEvent& e) override;
 };
 
 
