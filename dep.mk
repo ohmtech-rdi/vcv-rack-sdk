@@ -5,10 +5,13 @@ DEP_LOCAL ?= dep
 $(shell mkdir -p $(DEP_LOCAL))
 DEP_PATH := $(abspath $(DEP_LOCAL))
 
-DEP_FLAGS += -g -O3 -march=nocona
+DEP_FLAGS += -g -O3 -march=nehalem
+# This is needed for Rack for DAWs.
+# Static libs don't usually compiled with -fPIC, but since we're including them in a shared library, it's needed.
+DEP_FLAGS += -fPIC
 
-ifeq ($(ARCH), mac)
-	DEP_MAC_SDK_FLAGS := -mmacosx-version-min=10.7
+ifdef ARCH_MAC
+	DEP_MAC_SDK_FLAGS := -mmacosx-version-min=10.9
 	DEP_FLAGS += $(DEP_MAC_SDK_FLAGS) -stdlib=libc++
 	DEP_LDFLAGS += $(DEP_MAC_SDK_FLAGS) -stdlib=libc++
 endif
@@ -32,12 +35,13 @@ CMAKE += -DCMAKE_INSTALL_LIBDIR=lib
 
 ifdef ARCH_MAC
 	SHA256SUM := shasum -a 256
+	SED := sed -i ''
 else
 	SHA256SUM := sha256sum
+	SED := sed -i
 endif
 SHA256 := sha256check() { echo "$$2  $$1" | $(SHA256SUM) -c; }; sha256check
 
-SED := perl -pi -e
 
 # Export environment for all dependency targets
 $(DEPS): export CFLAGS = $(DEP_CFLAGS)

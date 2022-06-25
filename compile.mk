@@ -6,13 +6,15 @@ include $(RACK_DIR)/arch.mk
 
 OBJCOPY ?= objcopy
 STRIP ?= strip
+INSTALL_NAME_TOOL ?= install_name_tool
+OTOOL ?= otool
 
 # Generate dependency files alongside the object files
 FLAGS += -MMD -MP
 # Debugger symbols. These are removed with `strip`.
 FLAGS += -g
 # Optimization
-FLAGS += -O3 -march=nocona -funsafe-math-optimizations
+FLAGS += -O3 -march=nehalem -funsafe-math-optimizations -fno-omit-frame-pointer
 # Warnings
 FLAGS += -Wall -Wextra -Wno-unused-parameter
 # C++ standard
@@ -27,13 +29,14 @@ ifdef ARCH_MAC
 	FLAGS += -DARCH_MAC
 	CXXFLAGS += -stdlib=libc++
 	LDFLAGS += -stdlib=libc++
-	MAC_SDK_FLAGS = -mmacosx-version-min=10.7
+	MAC_SDK_FLAGS := -mmacosx-version-min=10.9
 	FLAGS += $(MAC_SDK_FLAGS)
 	LDFLAGS += $(MAC_SDK_FLAGS)
 endif
 ifdef ARCH_WIN
 	FLAGS += -DARCH_WIN
 	FLAGS += -D_USE_MATH_DEFINES
+	FLAGS += -municode
 	CXXFLAGS += -Wsuggest-override
 endif
 
@@ -88,3 +91,6 @@ ifdef ARCH_MAC
 	@# Apple makes this needlessly complicated, so just generate a C file with an array.
 	xxd -i $< | $(CC) $(MAC_SDK_FLAGS) -c -o $@ -xc -
 endif
+
+build/%.html: %.md
+	markdown $< > $@

@@ -15,6 +15,10 @@ class UserException(Exception):
     pass
 
 
+def eprint(*args, **kwargs):
+	print(*args, file=sys.stderr, **kwargs)
+
+
 def find(f, array):
 	for a in array:
 		if f(a):
@@ -31,12 +35,17 @@ def is_valid_slug(slug):
 	return re.match(r'^[a-zA-Z0-9_\-]+$', slug) != None
 
 
-def slug_to_identifier(slug):
-	if len(slug) == 0 or slug[0].isdigit():
-		slug = "_" + slug
-	slug = slug[0].upper() + slug[1:]
-	slug = slug.replace('-', '_')
-	return slug
+def str_to_identifier(s):
+	if not s:
+		return "_"
+	# Identifiers can't start with a number
+	if s[0].isdigit():
+		s = "_" + s
+	# Capitalize first letter
+	s = s[0].upper() + s[1:]
+	# Replace special characters with underscore
+	s = re.sub(r'\W', '_', s)
+	return s
 
 
 def create_plugin(slug, plugin_dir=None):
@@ -85,6 +94,7 @@ SOURCES += $(wildcard src/*.cpp)
 # The compiled plugin and "plugin.json" are automatically added.
 DISTRIBUTABLES += res
 DISTRIBUTABLES += $(wildcard LICENSE*)
+DISTRIBUTABLES += $(wildcard presets)
 
 # Include the Rack plugin Makefile framework
 include $(RACK_DIR)/plugin.mk
@@ -138,9 +148,9 @@ void init(Plugin* p) {
 	with open(os.path.join(plugin_dir, ".gitignore"), "w") as f:
 		f.write(git_ignore)
 
-	print(f"Created template plugin in {plugin_dir}")
+	eprint(f"Created template plugin in {plugin_dir}")
 	os.system(f"cd {plugin_dir} && git init")
-	print(f"You may use `make`, `make clean`, `make dist`, `make install`, etc in the {plugin_dir} directory.")
+	eprint(f"You may use `make`, `make clean`, `make dist`, `make install`, etc in the {plugin_dir} directory.")
 
 
 def create_manifest(slug, plugin_dir="."):
@@ -159,7 +169,7 @@ def create_manifest(slug, plugin_dir="."):
 
 	# Query manifest information
 	manifest['name'] = input_default("Plugin name", manifest.get('name', slug))
-	manifest['version'] = input_default("Version", manifest.get('version', "1.0.0"))
+	manifest['version'] = input_default("Version", manifest.get('version', "2.0.0"))
 	manifest['license'] = input_default("License (if open-source, use license identifier from https://spdx.org/licenses/)", manifest.get('license', "proprietary"))
 	manifest['brand'] = input_default("Brand (prefix for all module names)", manifest.get('brand', manifest['name']))
 	manifest['author'] = input_default("Author", manifest.get('author', ""))
@@ -177,7 +187,8 @@ def create_manifest(slug, plugin_dir="."):
 	# Dump JSON
 	with open(manifest_filename, "w") as f:
 		json.dump(manifest, f, indent="  ")
-	print(f"Manifest written to {manifest_filename}")
+	eprint("")
+	eprint(f"Manifest written to {manifest_filename}")
 
 
 def create_module(slug, panel_filename=None, source_filename=None):
@@ -193,7 +204,7 @@ def create_module(slug, panel_filename=None, source_filename=None):
 	# Check if module manifest exists
 	module_manifest = find(lambda m: m['slug'] == slug, manifest['modules'])
 	if module_manifest:
-		print(f"Module {slug} already exists in plugin.json. Edit this file to modify the module manifest.")
+		eprint(f"Module {slug} already exists in plugin.json. Edit this file to modify the module manifest.")
 
 	else:
 		# Add module to manifest
@@ -214,42 +225,44 @@ def create_module(slug, panel_filename=None, source_filename=None):
 		with open(manifest_filename, "w") as f:
 			json.dump(manifest, f, indent="  ")
 
-		print(f"Added {slug} to {manifest_filename}")
+		eprint(f"Added {slug} to {manifest_filename}")
 
 	# Check filenames
-	if panel_filename and source_filename:
+	if panel_filename:
 		if not os.path.exists(panel_filename):
 			raise UserException(f"Panel not found at {panel_filename}.")
 
-		print(f"Panel found at {panel_filename}. Generating source file.")
-
-		if os.path.exists(source_filename):
-			if input_default(f"{source_filename} already exists. Overwrite?", "n").lower() != "y":
+		if source_filename and os.path.exists(source_filename):
+			if input_default(f"{source_filename} already exists. Overwrite? (y/n)", "n").lower() != "y":
 				return
 
 		# Read SVG XML
 		tree = xml.etree.ElementTree.parse(panel_filename)
 
 		components = panel_to_components(tree)
-		print(f"Components extracted from {panel_filename}")
+
+		# Tell user to add model to plugin.hpp and plugin.cpp
+		identifier = str_to_identifier(slug)
+		eprint(f"""
+To enable the module, add
+
+	extern Model* model{identifier};
+
+to plugin.hpp, and add
+
+	p->addModel(model{identifier});
+
+to the init() function in plugin.cpp.""")
 
 		# Write source
 		source = components_to_source(components, slug)
 
-		with open(source_filename, "w") as f:
-			f.write(source)
-		print(f"Source file generated at {source_filename}")
-
-		# Append model to plugin.hpp
-		identifier = slug_to_identifier(slug)
-
-		# Tell user to add model to plugin.hpp and plugin.cpp
-		print(f"""
-To enable the module, add
-extern Model* model{identifier};
-to plugin.hpp, and add
-p->addModel(model{identifier});
-to the init() function in plugin.cpp.""")
+		if source_filename:
+			with open(source_filename, "w") as f:
+				f.write(source)
+			eprint(f"Source file generated at {source_filename}")
+		else:
+			print(source)
 
 
 def panel_to_components(tree):
@@ -258,19 +271,26 @@ def panel_to_components(tree):
 		"inkscape": "http://www.inkscape.org/namespaces/inkscape",
 	}
 
-	# Get components layer
 	root = tree.getroot()
-	groups = root.findall(".//svg:g[@inkscape:label='components']", ns)
-	# Illustrator uses `id` for the group name.
-	if len(groups) < 1:
-		groups = root.findall(".//svg:g[@id='components']", ns)
-	if len(groups) < 1:
-		raise UserException("Could not find \"components\" layer on panel")
+	# Get SVG scale relative to mm
+	root_height = root.get('height')
+	if root_height.endswith("mm"):
+		scale = 1
+	else:
+		svg_dpi = 75
+		mm_per_in = 25.4
+		scale = mm_per_in / svg_dpi
 
-	# Get circles and rects
-	components_group = groups[0]
-	circles = components_group.findall(".//svg:circle", ns)
-	rects = components_group.findall(".//svg:rect", ns)
+	# Get components layer
+	group = root.find(".//svg:g[@inkscape:label='components']", ns)
+	# Illustrator uses `data-name` (in Unique object ID mode) or `id` (in Layer Names object ID mode) for the group name.
+	# Don't test with `not group` since Elements with no subelements are falsy.
+	if group is None:
+		group = root.find(".//svg:g[@data-name='components']", ns)
+	if group is None:
+		group = root.find(".//svg:g[@id='components']", ns)
+	if group is None:
+		raise UserException("Could not find \"components\" layer on panel")
 
 	components = {}
 	components['params'] = []
@@ -279,64 +299,90 @@ def panel_to_components(tree):
 	components['lights'] = []
 	components['widgets'] = []
 
-	for el in circles + rects:
+	for el in group:
 		c = {}
+
 		# Get name
-		name = el.get('{http://www.inkscape.org/namespaces/inkscape}label')
-		if name is None:
+		name = el.get('{' + ns['inkscape'] + '}label')
+		# Illustrator names
+		if not name:
+			name = el.get('data-name')
+		if not name:
 			name = el.get('id')
-		name = slug_to_identifier(name).upper()
+		if not name:
+			name = ""
+		# Split name and component class name
+		names = name.split('#', 1)
+		name = names[0]
+		if len(names) >= 2:
+			c['cls'] = names[1]
+		name = str_to_identifier(name).upper()
 		c['name'] = name
 
-		# Get color
-		style = el.get('style')
-		color_match = re.search(r'fill:\S*#(.{6});', style)
-		color = color_match.group(1).lower()
-		c['color'] = color
-
 		# Get position
-		if el.tag == "{http://www.w3.org/2000/svg}rect":
-			x = float(el.get('x'))
-			y = float(el.get('y'))
-			width = float(el.get('width'))
-			height = float(el.get('height'))
+		if el.tag == '{' + ns['svg'] + '}rect':
+			x = float(el.get('x')) * scale
+			y = float(el.get('y')) * scale
+			width = float(el.get('width')) * scale
+			height = float(el.get('height')) * scale
 			c['x'] = round(x, 3)
 			c['y'] = round(y, 3)
 			c['width'] = round(width, 3)
 			c['height'] = round(height, 3)
 			c['cx'] = round(x + width / 2, 3)
 			c['cy'] = round(y + height / 2, 3)
-		elif el.tag == "{http://www.w3.org/2000/svg}circle":
-			cx = float(el.get('cx'))
-			cy = float(el.get('cy'))
+		elif el.tag == '{' + ns['svg'] + '}circle' or el.tag == '{' + ns['svg'] + '}ellipse':
+			cx = float(el.get('cx')) * scale
+			cy = float(el.get('cy')) * scale
 			c['cx'] = round(cx, 3)
 			c['cy'] = round(cy, 3)
+		else:
+			eprint(f"Element in components layer is not rect, circle, or ellipse: {el}")
+			continue
 
-		if color == 'ff0000':
+		# Get color
+		color = None
+		# Get color from fill attribute
+		fill = el.get('fill')
+		if fill:
+			color = fill
+		# Get color from CSS fill style
+		if not color:
+			style = el.get('style')
+			if style:
+				color_match = re.search(r'fill:\S*(#[0-9a-fA-F]{6})', style)
+				color = color_match.group(1)
+		if not color:
+			eprint(f"Cannot get color of component: {el}")
+			continue
+
+		color = color.lower()
+
+		if color == '#ff0000' or color == '#f00' or color == 'red':
 			components['params'].append(c)
-		if color == '00ff00':
+		if color == '#00ff00' or color == '#0f0' or color == 'lime':
 			components['inputs'].append(c)
-		if color == '0000ff':
+		if color == '#0000ff' or color == '#00f' or color == 'blue':
 			components['outputs'].append(c)
-		if color == 'ff00ff':
+		if color == '#ff00ff' or color == '#f0f' or color == 'magenta':
 			components['lights'].append(c)
-		if color == 'ffff00':
+		if color == '#ffff00' or color == '#ff0' or color == 'yellow':
 			components['widgets'].append(c)
 
 	# Sort components
-	top_left_sort = lambda w: (w['cy'], w['cx'])
+	top_left_sort = lambda w: w['cy'] + 0.01 * w['cx']
 	components['params'] = sorted(components['params'], key=top_left_sort)
 	components['inputs'] = sorted(components['inputs'], key=top_left_sort)
 	components['outputs'] = sorted(components['outputs'], key=top_left_sort)
 	components['lights'] = sorted(components['lights'], key=top_left_sort)
 	components['widgets'] = sorted(components['widgets'], key=top_left_sort)
 
-	print(f"Found {len(components['params'])} params, {len(components['inputs'])} inputs, {len(components['outputs'])} outputs, {len(components['lights'])} lights, and {len(components['widgets'])} custom widgets.")
+	eprint(f"Found {len(components['params'])} params, {len(components['inputs'])} inputs, {len(components['outputs'])} outputs, {len(components['lights'])} lights, and {len(components['widgets'])} custom widgets in \"components\" layer.")
 	return components
 
 
 def components_to_source(components, slug):
-	identifier = slug_to_identifier(slug)
+	identifier = str_to_identifier(slug)
 	source = ""
 
 	source += f"""#include "plugin.hpp"
@@ -346,53 +392,61 @@ struct {identifier} : Module {{"""
 
 	# Params
 	source += """
-	enum ParamIds {"""
+	enum ParamId {"""
 	for c in components['params']:
 		source += f"""
 		{c['name']}_PARAM,"""
 	source += """
-		NUM_PARAMS
+		PARAMS_LEN
 	};"""
 
 	# Inputs
 	source += """
-	enum InputIds {"""
+	enum InputId {"""
 	for c in components['inputs']:
 		source += f"""
 		{c['name']}_INPUT,"""
 	source += """
-		NUM_INPUTS
+		INPUTS_LEN
 	};"""
 
 	# Outputs
 	source += """
-	enum OutputIds {"""
+	enum OutputId {"""
 	for c in components['outputs']:
 		source += f"""
 		{c['name']}_OUTPUT,"""
 	source += """
-		NUM_OUTPUTS
+		OUTPUTS_LEN
 	};"""
 
 	# Lights
 	source += """
-	enum LightIds {"""
+	enum LightId {"""
 	for c in components['lights']:
 		source += f"""
 		{c['name']}_LIGHT,"""
 	source += """
-		NUM_LIGHTS
+		LIGHTS_LEN
 	};"""
 
 
 	source += f"""
 
 	{identifier}() {{
-		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);"""
+		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);"""
 
 	for c in components['params']:
 		source += f"""
 		configParam({c['name']}_PARAM, 0.f, 1.f, 0.f, "");"""
+
+	for c in components['inputs']:
+		source += f"""
+		configInput({c['name']}_INPUT, "");"""
+
+	for c in components['outputs']:
+		source += f"""
+		configOutput({c['name']}_OUTPUT, "");"""
 
 	source += """
 	}
@@ -407,7 +461,7 @@ struct {identifier} : Module {{"""
 struct {identifier}Widget : ModuleWidget {{
 	{identifier}Widget({identifier}* module) {{
 		setModule(module);
-		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/{slug}.svg")));
+		setPanel(createPanel(asset::plugin(pluginInstance, "res/{slug}.svg")));
 
 		addChild(createWidget<ScrewSilver>(Vec(RACK_GRID_WIDTH, 0)));
 		addChild(createWidget<ScrewSilver>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, 0)));
@@ -421,10 +475,10 @@ struct {identifier}Widget : ModuleWidget {{
 	for c in components['params']:
 		if 'x' in c:
 			source += f"""
-		addParam(createParam<RoundBlackKnob>(mm2px(Vec({c['x']}, {c['y']})), module, {identifier}::{c['name']}_PARAM));"""
+		addParam(createParam<{c.get('cls', 'RoundBlackKnob')}>(mm2px(Vec({c['x']}, {c['y']})), module, {identifier}::{c['name']}_PARAM));"""
 		else:
 			source += f"""
-		addParam(createParamCentered<RoundBlackKnob>(mm2px(Vec({c['cx']}, {c['cy']})), module, {identifier}::{c['name']}_PARAM));"""
+		addParam(createParamCentered<{c.get('cls', 'RoundBlackKnob')}>(mm2px(Vec({c['cx']}, {c['cy']})), module, {identifier}::{c['name']}_PARAM));"""
 
 	# Inputs
 	if len(components['inputs']) > 0:
@@ -432,10 +486,10 @@ struct {identifier}Widget : ModuleWidget {{
 	for c in components['inputs']:
 		if 'x' in c:
 			source += f"""
-		addInput(createInput<PJ301MPort>(mm2px(Vec({c['x']}, {c['y']})), module, {identifier}::{c['name']}_INPUT));"""
+		addInput(createInput<{c.get('cls', 'PJ301MPort')}>(mm2px(Vec({c['x']}, {c['y']})), module, {identifier}::{c['name']}_INPUT));"""
 		else:
 			source += f"""
-		addInput(createInputCentered<PJ301MPort>(mm2px(Vec({c['cx']}, {c['cy']})), module, {identifier}::{c['name']}_INPUT));"""
+		addInput(createInputCentered<{c.get('cls', 'PJ301MPort')}>(mm2px(Vec({c['cx']}, {c['cy']})), module, {identifier}::{c['name']}_INPUT));"""
 
 	# Outputs
 	if len(components['outputs']) > 0:
@@ -443,10 +497,10 @@ struct {identifier}Widget : ModuleWidget {{
 	for c in components['outputs']:
 		if 'x' in c:
 			source += f"""
-		addOutput(createOutput<PJ301MPort>(mm2px(Vec({c['x']}, {c['y']})), module, {identifier}::{c['name']}_OUTPUT));"""
+		addOutput(createOutput<{c.get('cls', 'PJ301MPort')}>(mm2px(Vec({c['x']}, {c['y']})), module, {identifier}::{c['name']}_OUTPUT));"""
 		else:
 			source += f"""
-		addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec({c['cx']}, {c['cy']})), module, {identifier}::{c['name']}_OUTPUT));"""
+		addOutput(createOutputCentered<{c.get('cls', 'PJ301MPort')}>(mm2px(Vec({c['cx']}, {c['cy']})), module, {identifier}::{c['name']}_OUTPUT));"""
 
 	# Lights
 	if len(components['lights']) > 0:
@@ -454,10 +508,10 @@ struct {identifier}Widget : ModuleWidget {{
 	for c in components['lights']:
 		if 'x' in c:
 			source += f"""
-		addChild(createLight<MediumLight<RedLight>>(mm2px(Vec({c['x']}, {c['y']})), module, {identifier}::{c['name']}_LIGHT));"""
+		addChild(createLight<{c.get('cls', 'MediumLight<RedLight>')}>(mm2px(Vec({c['x']}, {c['y']})), module, {identifier}::{c['name']}_LIGHT));"""
 		else:
 			source += f"""
-		addChild(createLightCentered<MediumLight<RedLight>>(mm2px(Vec({c['cx']}, {c['cy']})), module, {identifier}::{c['name']}_LIGHT));"""
+		addChild(createLightCentered<{c.get('cls', 'MediumLight<RedLight>')}>(mm2px(Vec({c['cx']}, {c['cy']})), module, {identifier}::{c['name']}_LIGHT));"""
 
 	# Widgets
 	if len(components['widgets']) > 0:
@@ -466,10 +520,10 @@ struct {identifier}Widget : ModuleWidget {{
 		if 'x' in c:
 			source += f"""
 		// mm2px(Vec({c['width']}, {c['height']}))
-		addChild(createWidget<Widget>(mm2px(Vec({c['x']}, {c['y']}))));"""
+		addChild(createWidget<{c.get('cls', 'Widget')}>(mm2px(Vec({c['x']}, {c['y']}))));"""
 		else:
 			source += f"""
-		addChild(createWidgetCentered<Widget>(mm2px(Vec({c['cx']}, {c['cy']}))));"""
+		addChild(createWidgetCentered<{c.get('cls', 'Widget')}>(mm2px(Vec({c['cx']}, {c['cy']}))));"""
 
 	source += f"""
 	}}
@@ -482,7 +536,7 @@ Model* model{identifier} = createModel<{identifier}, {identifier}Widget>("{slug}
 
 
 def usage(script):
-	text = f"""VCV Rack Plugin Helper Utility
+	text = f"""VCV Rack Plugin Development Helper
 
 Usage: {script} <command> ...
 Commands:
@@ -506,7 +560,7 @@ createmodule <module slug> [panel file] [source file]
 
 	See https://vcvrack.com/manual/PanelTutorial.html for creating SVG panel files.
 """
-	print(text)
+	eprint(text)
 
 
 def parse_args(args):
@@ -523,7 +577,7 @@ def parse_args(args):
 	elif cmd == 'createmanifest':
 		create_manifest(*args)
 	else:
-		print(f"Command not found: {cmd}")
+		eprint(f"Command not found: {cmd}")
 
 
 if __name__ == "__main__":
@@ -532,5 +586,5 @@ if __name__ == "__main__":
 	except KeyboardInterrupt:
 		pass
 	except UserException as e:
-		print(e)
+		eprint(e)
 		sys.exit(1)

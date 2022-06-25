@@ -21,7 +21,7 @@ struct TransformWidget : Widget {
 
 	void translate(math::Vec delta) {
 		float t[6];
-		nvgTransformTranslate(t, delta.x, delta.y);
+		nvgTransformTranslate(t, VEC_ARGS(delta));
 		nvgTransformPremultiply(transform, t);
 	}
 
@@ -29,6 +29,12 @@ struct TransformWidget : Widget {
 		float t[6];
 		nvgTransformRotate(t, angle);
 		nvgTransformPremultiply(transform, t);
+	}
+
+	void rotate(float angle, math::Vec origin) {
+		translate(origin);
+		rotate(angle);
+		translate(origin.neg());
 	}
 
 	void scale(math::Vec s) {
@@ -41,6 +47,12 @@ struct TransformWidget : Widget {
 		// No need to save the state because that is done in the parent
 		nvgTransform(args.vg, transform[0], transform[1], transform[2], transform[3], transform[4], transform[5]);
 		Widget::draw(args);
+	}
+
+	void drawLayer(const DrawArgs& args, int layer) override {
+		// No need to save the state because that is done in the parent
+		nvgTransform(args.vg, transform[0], transform[1], transform[2], transform[3], transform[4], transform[5]);
+		Widget::drawLayer(args, layer);
 	}
 };
 

@@ -1,10 +1,13 @@
 #pragma once
+#include <vector>
+#include <deque>
+
+#include <jansson.h>
+
 #include <common.hpp>
 #include <math.hpp>
 #include <color.hpp>
 #include <plugin/Model.hpp>
-#include <vector>
-#include <jansson.h>
 
 
 namespace rack {
@@ -16,7 +19,7 @@ struct CableWidget;
 } // namespace app
 
 
-/** Undo history actions for the Rack application */
+/** Action history for UI undo/redo */
 namespace history {
 
 
@@ -61,7 +64,7 @@ struct ComplexAction : Action {
 Subclass this to create your own custom actions for your module.
 */
 struct ModuleAction : Action {
-	int moduleId;
+	int64_t moduleId;
 };
 
 
@@ -98,7 +101,7 @@ struct ModuleMove : ModuleAction {
 
 
 struct ModuleBypass : ModuleAction {
-	bool bypass;
+	bool bypassed;
 	void undo() override;
 	void redo() override;
 	ModuleBypass() {
@@ -132,11 +135,11 @@ struct ParamChange : ModuleAction {
 
 
 struct CableAdd : Action {
-	int cableId;
-	int outputModuleId;
-	int outputId;
-	int inputModuleId;
+	int64_t cableId;
+	int64_t inputModuleId;
 	int inputId;
+	int64_t outputModuleId;
+	int outputId;
 	NVGcolor color;
 	void setCable(app::CableWidget* cw);
 	void undo() override;
@@ -155,14 +158,17 @@ struct CableRemove : InverseAction<CableAdd> {
 
 
 struct State {
-	std::vector<Action*> actions;
+	struct Internal;
+	Internal* internal;
+
+	std::deque<Action*> actions;
 	int actionIndex;
 	/** Action index of saved patch state. */
 	int savedIndex;
 
-	State();
-	~State();
-	void clear();
+	PRIVATE State();
+	PRIVATE ~State();
+	PRIVATE void clear();
 	void push(Action* action);
 	void undo();
 	void redo();

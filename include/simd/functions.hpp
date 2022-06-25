@@ -1,5 +1,5 @@
 #pragma once
-#include <simd/vector.hpp>
+#include <simd/Vector.hpp>
 #include <simd/sse_mathfun_extension.h>
 #include <common.hpp>
 #include <math.hpp>
@@ -9,15 +9,25 @@ namespace rack {
 namespace simd {
 
 
-// Nonstandard functions
+// Functions based on instructions
 
-inline float ifelse(bool cond, float a, float b) {
-	return cond ? a : b;
+/** `~a & b` */
+inline float_4 andnot(float_4 a, float_4 b) {
+	return float_4(_mm_andnot_ps(a.v, b.v));
 }
 
-/** Given a mask, returns a if mask is 0xffffffff per element, b if mask is 0x00000000 */
-inline float_4 ifelse(float_4 mask, float_4 a, float_4 b) {
-	return (a & mask) | andnot(mask, b);
+/** Returns an integer with each bit corresponding to the most significant bit of each element.
+For example, `movemask(float_4::mask())` returns 0xf.
+*/
+inline int movemask(float_4 a) {
+	return _mm_movemask_ps(a.v);
+}
+
+/** Returns an integer with each bit corresponding to the most significant bit of each element.
+For example, `movemask(int32_4::mask())` returns 0xf.
+*/
+inline int movemask(int32_4 a) {
+	return _mm_movemask_ps(_mm_castsi128_ps(a.v));
 }
 
 /** Returns the approximate reciprocal square root.
@@ -34,17 +44,33 @@ inline float_4 rcp(float_4 x) {
 	return float_4(_mm_rcp_ps(x.v));
 }
 
-/** Given a mask `a`, returns a vector with each element either 0's or 1's depending on the mask bit.
+
+// Nonstandard convenience functions
+
+inline float ifelse(bool cond, float a, float b) {
+	return cond ? a : b;
+}
+
+/** Given a mask, returns a if mask is 0xffffffff per element, b if mask is 0x00000000 */
+inline float_4 ifelse(float_4 mask, float_4 a, float_4 b) {
+	return (a & mask) | andnot(mask, b);
+}
+
+/** Returns a vector where element N is all 1's if the N'th bit of `a` is 1, or all 0's if the N'th bit of `a` is 0.
 */
 template <typename T>
 T movemaskInverse(int a);
 
 template <>
-inline float_4 movemaskInverse<float_4>(int x) {
-	__m128i msk8421 = _mm_set_epi32(8, 4, 2, 1);
-	__m128i x_bc = _mm_set1_epi32(x);
-	__m128i t = _mm_and_si128(x_bc, msk8421);
-	return float_4(_mm_castsi128_ps(_mm_cmpeq_epi32(x_bc, t)));
+inline int32_4 movemaskInverse<int32_4>(int a) {
+	// Pick out N'th bit of `a` and check if it's 1.
+	int32_4 mask1234 = int32_4(1, 2, 4, 8);
+	return (mask1234 & int32_4(a)) == mask1234;
+}
+
+template <>
+inline float_4 movemaskInverse<float_4>(int a) {
+	return float_4::cast(movemaskInverse<int32_4>(a));
 }
 
 
@@ -224,7 +250,7 @@ T pow(T a, int b) {
 
 using math::clamp;
 
-inline float_4 clamp(float_4 x, float_4 a, float_4 b) {
+inline float_4 clamp(float_4 x, float_4 a = 0.f, float_4 b = 1.f) {
 	return fmin(fmax(x, a), b);
 }
 

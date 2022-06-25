@@ -1,9 +1,9 @@
 /*************************************************************************
- * GLFW 3.4 - www.glfw.org
+ * GLFW 3.3 - www.glfw.org
  * A library for OpenGL, window and input
  *------------------------------------------------------------------------
  * Copyright (c) 2002-2006 Marcus Geelnard
- * Copyright (c) 2006-2018 Camilla Löwy <elmindreda@glfw.org>
+ * Copyright (c) 2006-2016 Camilla Löwy <elmindreda@glfw.org>
  *
  * This software is provided 'as-is', without any express or implied
  * warranty. In no event will the authors be held liable for any damages
@@ -215,20 +215,6 @@ GLFWAPI CGDirectDisplayID glfwGetCocoaMonitor(GLFWmonitor* monitor);
  *  @ingroup native
  */
 GLFWAPI id glfwGetCocoaWindow(GLFWwindow* window);
-
-/*! @brief Returns the list of filenames that opened the application,
- *  such as by dragging files to the app bundle or through file associations.
- *
- *  @return A list of strings, null terminated.
- *
- *  @thread_safety This function may be called from any thread.  Access is not
- *  synchronized.
- *
- *  @since Added in version 3.4.
- *
- *  @ingroup native
- */
-const char* const* glfwGetOpenedFilenames(void);
 #endif
 
 #if defined(GLFW_EXPOSE_NATIVE_NSGL)
