@@ -12,5 +12,13 @@ Rack doesn't provide a repository for their SDK, and including it as a submodule
 [`eurorack-blocks`](https://github.com/ohmtech-rdi/eurorack-blocks) project simplifies
 installation and automations.
 
-Always refer to the official source. This repository is currently using
-[version 1.1.6](https://vcvrack.com/downloads/Rack-SDK-1.1.6.zip) of the VCV Rack SDK.
+Always refer to the official source.
+
+This repository is currently using
+**version 2.0.6** of the VCV Rack SDK, with the following modifications:
+- The `lin` (Linux), `mac` (macOS), `win` (Windows) variants of the SDK have been
+   unified into one,
+- Since the only difference (apart from the compiled libraries) between the
+   different SDK variants are all in `openssl`, which itself is a dependency of
+   `curl`, which eurorack-blocks doesn't use (or support), and neither the SDK
+   files are including `curl`, we are removing those 2 dependencies all together.
