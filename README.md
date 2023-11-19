@@ -15,10 +15,11 @@ installation and automations.
 Always refer to the official source.
 
 This repository is currently using
-**version 2.0.6** of the VCV Rack SDK, with the following modifications:
+**version 2.4.0** of the VCV Rack SDK, with the following modifications:
 - The `lin` (Linux), `mac` (macOS), `win` (Windows) variants of the SDK have been
    unified into one,
 - Since the only difference (apart from the compiled libraries) between the
    different SDK variants are all in `openssl`, which itself is a dependency of
    `curl`, which eurorack-blocks doesn't use (or support), and neither the SDK
-   files are including `curl`, we are removing those 2 dependencies all together.
+   files are including `curl`, we are removing those 2 dependencies all together,
+- The compiled libraries have been organised by OS and CPU architecture.
