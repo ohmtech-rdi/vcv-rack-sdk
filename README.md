@@ -22,4 +22,9 @@ This repository is currently using
    different SDK variants are all in `openssl`, which itself is a dependency of
    `curl`, which eurorack-blocks doesn't use (or support), and neither the SDK
    files are including `curl`, we are removing those 2 dependencies all together,
-- The compiled libraries have been organised by OS and CPU architecture.
+- The compiled libraries have been organised by OS and CPU architecture,
+- `mac/libRack.dylib` combines `mac-arm64` and `mac-x64` in one "fat" library.
+
+```
+lipo -create mac-arm64/libRack.dylib mac-x64/libRack.dylib -output mac/libRack.dylib
+```
